@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-      - "beta/v*"
 
 jobs:
   publish-upm-branches:
@@ -24,38 +23,37 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           TAG_SHA="${GITHUB_SHA}"
 
-          if [[ "${TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          # SemVer 2.0 (no build metadata): vX.Y.Z with optional -prerelease of
+          # dot-separated identifiers ([0-9A-Za-z-], numeric ones without leading zeros).
+          SEMVER_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
+
+          if [[ "${TAG}" =~ ${SEMVER_RE} ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
             PATCH="${BASH_REMATCH[3]}"
+            PRERELEASE="${BASH_REMATCH[5]}"
             VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          else
+            echo "Unsupported tag format: ${TAG}"
+            echo "Expected a SemVer tag: vX.Y.Z or vX.Y.Z-<prerelease> (e.g. v3.0.0-beta.1, v3.0.0-rc.1, v3.0.0-preview-20260704)"
+            exit 1
+          fi
+
+          if [ -z "${PRERELEASE}" ]; then
             PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
             BRANCH_PREFIX="upm"
             RELEASE_NAME="${VERSION}"
             RELEASE_PRERELEASE="false"
-          elif [[ "${TAG}" =~ ^beta/v([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)$ ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH="${BASH_REMATCH[3]}"
-            BETA_NUMBER="${BASH_REMATCH[4]}"
-            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
-            PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}-beta.${BETA_NUMBER}"
-            BRANCH_PREFIX="upm/beta"
-            RELEASE_NAME="${VERSION} Beta #${BETA_NUMBER}"
-            RELEASE_PRERELEASE="true"
-          elif [[ "${TAG}" =~ ^beta/v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            MAJOR="${BASH_REMATCH[1]}"
-            MINOR="${BASH_REMATCH[2]}"
-            PATCH="${BASH_REMATCH[3]}"
-            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
-            PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}-beta"
-            BRANCH_PREFIX="upm/beta"
-            RELEASE_NAME="${VERSION} Beta"
-            RELEASE_PRERELEASE="true"
           else
-            echo "Unsupported tag format: ${TAG}"
-            echo "Expected: vX.X.X or beta/vX.X.X or beta/vX.X.X-Y"
-            exit 1
+            PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}-${PRERELEASE}"
+            # Channel = leading letters of the prerelease (beta.1 -> beta, rc.1 -> rc,
+            # preview-20260704 -> preview); purely numeric prereleases fall back to "pre".
+            CHANNEL="$(printf '%s' "${PRERELEASE}" | grep -oE '^[A-Za-z]+' || true)"
+            [ -n "${CHANNEL}" ] || CHANNEL="pre"
+            CHANNEL="$(printf '%s' "${CHANNEL}" | tr '[:upper:]' '[:lower:]')"
+            BRANCH_PREFIX="upm/${CHANNEL}"
+            RELEASE_NAME="v${PACKAGE_VERSION}"
+            RELEASE_PRERELEASE="true"
           fi
 
           echo "TAG=${TAG}" >> "${GITHUB_ENV}"
