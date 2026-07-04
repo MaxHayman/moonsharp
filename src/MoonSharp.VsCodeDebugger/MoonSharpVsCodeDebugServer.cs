@@ -15,6 +15,7 @@ namespace MoonSharp.VsCodeDebugger
 	public class MoonSharpVsCodeDebugServer : IDisposable
 	{
 		readonly int m_Port;
+		readonly IPAddress m_Address;
 		readonly object m_Lock = new object();
 		readonly List<AsyncDebugger> m_PendingDebuggerList = new List<AsyncDebugger>();
 
@@ -22,12 +23,27 @@ namespace MoonSharp.VsCodeDebugger
 		ScriptDebugSession m_Session;
 
 		/// <summary>
-		/// Initializes a new instance of the <see cref="MoonSharpVsCodeDebugServer" /> class.
+		/// Initializes a new instance of the <see cref="MoonSharpVsCodeDebugServer" /> class,
+		/// listening on the loopback interface only.
 		/// </summary>
 		/// <param name="port">The port on which the debugger listens. It's recommended to use 41912.</param>
 		public MoonSharpVsCodeDebugServer(int port = 41912)
+			: this(port, null)
+		{
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="MoonSharpVsCodeDebugServer" /> class.
+		/// </summary>
+		/// <param name="port">The port on which the debugger listens. It's recommended to use 41912.</param>
+		/// <param name="address">The address of the interface to listen on, e.g. <see cref="IPAddress.Any"/> to
+		/// accept remote debuggers. Defaults to <see cref="IPAddress.Loopback"/> if null. Note that the debug
+		/// protocol is neither authenticated nor encrypted: anyone who can reach the port can control the
+		/// attached scripts, so bind to a non-loopback interface only on trusted networks.</param>
+		public MoonSharpVsCodeDebugServer(int port, IPAddress address)
 		{
 			m_Port = port;
+			m_Address = address ?? IPAddress.Loopback;
 		}
 
 		/// <summary>
@@ -252,7 +268,7 @@ namespace MoonSharp.VsCodeDebugger
 		}
 
 		/// <summary>
-		/// Starts listening on localhost for incoming connections.
+		/// Starts listening for incoming connections on the configured address (localhost by default).
 		/// </summary>
 		public MoonSharpVsCodeDebugServer Start()
 		{
@@ -263,7 +279,7 @@ namespace MoonSharp.VsCodeDebugger
 					throw new InvalidOperationException("Cannot start; server has already been started.");
 				}
 
-				m_Listener = new TcpListener(IPAddress.Loopback, m_Port);
+				m_Listener = new TcpListener(m_Address, m_Port);
 				m_Listener.Start();
 				int port = ((IPEndPoint)m_Listener.LocalEndpoint).Port;
 				m_Session = new ScriptDebugSession(port, this);

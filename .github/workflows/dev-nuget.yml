@@ -1,0 +1,65 @@
+name: Dev NuGet
+
+# Publishes unofficial dev packages (MaxHayman.MoonSharp, MaxHayman.MoonSharp.Debugger.VsCode)
+# to nuget.org on every push to the dev branch. Versions come from MinVer: the nearest
+# version tag plus commit height, e.g. 3.0.0-beta.1.7 — unique and SemVer-ordered per commit.
+# Skips gracefully when the NUGET_API_KEY secret is absent (e.g. on forks without it).
+
+on:
+  push:
+    branches:
+      - dev
+
+env:
+  PACKAGE_ID_PREFIX: "MaxHayman."
+
+jobs:
+  publish-dev-nuget:
+    # Dev packages are published from the MaxHayman fork only; the upstream repo's
+    # NUGET_API_KEY is scoped to the official package ids and must not be used here.
+    if: github.repository == 'MaxHayman/moonsharp'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check NuGet credentials
+        id: nuget-creds
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NUGET_API_KEY:-}" ]; then
+            echo "should_run=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should_run=false" >> "${GITHUB_OUTPUT}"
+            echo "NUGET_API_KEY secret is missing. Dev NuGet publish will be skipped."
+          fi
+
+      - name: Checkout
+        if: steps.nuget-creds.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        if: steps.nuget-creds.outputs.should_run == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Pack
+        if: steps.nuget-creds.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          dotnet pack src/MoonSharp.Interpreter/MoonSharp.Interpreter.csproj -c Release -o .artifacts/nuget-dev -p:MoonSharpPackageIdPrefix="${PACKAGE_ID_PREFIX}"
+          dotnet pack src/MoonSharp.VsCodeDebugger/MoonSharp.VsCodeDebugger.csproj -c Release -o .artifacts/nuget-dev -p:MoonSharpPackageIdPrefix="${PACKAGE_ID_PREFIX}"
+          ls .artifacts/nuget-dev
+
+      - name: Push to NuGet
+        if: steps.nuget-creds.outputs.should_run == 'true'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          dotnet nuget push ".artifacts/nuget-dev/*.nupkg" \
+            --api-key "${NUGET_API_KEY}" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --skip-duplicate

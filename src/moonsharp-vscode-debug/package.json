@@ -58,7 +58,6 @@
             {
                 "type": "moonsharp-lua",
                 "label": "MoonSharp",
-                "debugServer": 41912,
                 "languages": ["lua"],
                 "configurationAttributes": {
                     "attach": {
@@ -68,6 +67,16 @@
                                 "type": "string",
                                 "description": "File or directory path.",
                                 "default": ""
+                            },
+                            "host": {
+                                "type": "string",
+                                "description": "Host name or IP address of the MoonSharp debug server. The server must be listening on a non-loopback interface to accept remote connections.",
+                                "default": "127.0.0.1"
+                            },
+                            "port": {
+                                "type": "number",
+                                "description": "Port of the MoonSharp debug server.",
+                                "default": 41912
                             }
                         }
                     }

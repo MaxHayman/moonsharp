@@ -32,7 +32,14 @@ export class MoonSharpDebugConfigurationProvider implements vscode.DebugConfigur
 			return debugConfiguration
 		}
 
-		if (!debugConfiguration.debugServer) {
+		// The built-in debugServer attribute bypasses the adapter factory and always
+		// targets localhost; fold it into port so a custom host is honoured.
+		if (debugConfiguration.debugServer) {
+			debugConfiguration.port = debugConfiguration.port || debugConfiguration.debugServer
+			delete debugConfiguration.debugServer
+		}
+
+		if (!debugConfiguration.port) {
 			const inputPort = await vscode.window.showInputBox({
 				value: '41912',
 				prompt: 'MoonSharp server port',
@@ -48,11 +55,11 @@ export class MoonSharpDebugConfigurationProvider implements vscode.DebugConfigur
 				return null
 			}
 
-			debugConfiguration.debugServer = parseInt(inputPort)
+			debugConfiguration.port = parseInt(inputPort)
 		}
 
 		if (!debugConfiguration.slave && this.onPortProvided) {
-			this.onPortProvided(debugConfiguration.debugServer)
+			this.onPortProvided(debugConfiguration.port)
 		}
 
 		return {
